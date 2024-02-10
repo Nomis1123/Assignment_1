@@ -5,7 +5,7 @@
 #define HEADER_SIZE 44
 #define SAMPLE_SIZE sizeof(short)
 #define DEFAULT_DELAY 8000
-#define DEFAULT_VOLUME_SCALE 0.5
+#define DEFAULT_VOLUME_SCALE 4
 
 /*
 Function to check if a string is a positive integer.
@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
     char *output_file_path = argv[2];
     int delay = DEFAULT_DELAY;
     float volume_scale = DEFAULT_VOLUME_SCALE;
+    unsigned int *sizeptr;
 
     // Validate and parse delay
     if (argc > 3) {
@@ -95,16 +96,21 @@ int main(int argc, char *argv[]) {
     }
 
     // Read the header from the input file
-    unsigned char header[HEADER_SIZE];
-    if (fread(header, 1, HEADER_SIZE, input_file) != HEADER_SIZE) {
+    short header[HEADER_SIZE / 2];
+    if (fread(header, sizeof(short), HEADER_SIZE / 2, input_file) != HEADER_SIZE/2) {
         fprintf(stderr, "Error reading header from input file\n");
         fclose(input_file);
         fclose(output_file);
         return 1;
     }
 
+    sizeptr = (unsigned int *)(header + 2);
+    *sizeptr += delay * 2;
+    sizeptr = (unsigned int *)(header + 20);
+    *sizeptr += delay * 2;
+
     // Write the header to the output file
-    if (fwrite(header, 1, HEADER_SIZE, output_file) != HEADER_SIZE) {
+    if (fwrite(header, sizeof(short), HEADER_SIZE / 2, output_file) != HEADER_SIZE/2) {
         fprintf(stderr, "Error writing header to output file\n");
         fclose(input_file);
         fclose(output_file);
@@ -125,30 +131,53 @@ int main(int argc, char *argv[]) {
     // Read and process samples from the input file
     short sample;
     int buffer_index = 0;
+    short mixed_sample;
+        
     while (fread(&sample, SAMPLE_SIZE, 1, input_file) == 1) {
         // Get the echo sample from the echo buffer
-        short echo_sample = echo_buffer[buffer_index];
-
-        // Scale the echo sample
-        echo_sample = (short)(echo_sample * volume_scale);
-
-        // Mix the original sample with the echo sample
-        short mixed_sample = sample + echo_sample;
+	mixed_sample = echo_buffer[buffer_index] + sample;
 
         // Write the mixed sample to the output file
-        if (fwrite(&mixed_sample, SAMPLE_SIZE, 1, output_file) != 1) {
+	if (fwrite(&mixed_sample, SAMPLE_SIZE, 1, output_file) != 1) {
             fprintf(stderr, "Error writing mixed sample to output file\n");
             free(echo_buffer);
             fclose(input_file);
             fclose(output_file);
             return 1;
         }
-
-        // Update the echo buffer
-        echo_buffer[buffer_index] = sample;
+	
+	// Save the new modified sample to the buffer 
+	echo_buffer[buffer_index] = sample * volume_scale;        
+	
         buffer_index = (buffer_index + 1) % delay;
     }
-
+	
+    long extra_zeroes = delay - ((ftell(input_file) - HEADER_SIZE) / 2);
+    short *extra_pointer = 0;
+    if (extra_zeroes > 0) {
+    	for (long i = 0; i <= extra_zeroes; i++) {
+	    if (fwrite(extra_pointer, SAMPLE_SIZE, 1, output_file) != 1) {
+	    	fprintf(stderr, "Error writing mixed sample to output file\n");
+	        free(echo_buffer);
+	        fclose(input_file);
+	        fclose(output_file);
+	        return 1;
+	    }
+	}
+    }
+    
+    // Write the final echo samples to the output file
+    while (buffer_index <= delay){
+	if (fwrite(&echo_buffer[buffer_index], SAMPLE_SIZE, 1, output_file) != 1) {
+	    fprintf(stderr, "Error writing mixed sample to output file\n");
+	    free(echo_buffer);
+	    fclose(input_file);
+	    fclose(output_file);
+	    return 1;
+	}
+	
+	buffer_index++;
+    }
     // Cleanup
     free(echo_buffer);
     fclose(input_file);
