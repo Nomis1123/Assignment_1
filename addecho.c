@@ -147,16 +147,16 @@ int main(int argc, char *argv[]) {
         }
 	
 	// Save the new modified sample to the buffer 
-	echo_buffer[buffer_index] = sample * volume_scale;        
+	echo_buffer[buffer_index] = sample / volume_scale;        
 	
         buffer_index = (buffer_index + 1) % delay;
     }
 	
     long extra_zeroes = delay - ((ftell(input_file) - HEADER_SIZE) / 2);
-    short *extra_pointer = 0;
+    short zero = 0;
     if (extra_zeroes > 0) {
-    	for (long i = 0; i <= extra_zeroes; i++) {
-	    if (fwrite(extra_pointer, SAMPLE_SIZE, 1, output_file) != 1) {
+    	for (long i = 0; i < extra_zeroes; i++) {
+	    if (fwrite(&zero, SAMPLE_SIZE, 1, output_file) != 1) {
 	    	fprintf(stderr, "Error writing mixed sample to output file\n");
 	        free(echo_buffer);
 	        fclose(input_file);
@@ -167,7 +167,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Write the final echo samples to the output file
-    while (buffer_index <= delay){
+    for (short j = 0; j < delay; j++){
 	if (fwrite(&echo_buffer[buffer_index], SAMPLE_SIZE, 1, output_file) != 1) {
 	    fprintf(stderr, "Error writing mixed sample to output file\n");
 	    free(echo_buffer);
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
 	    return 1;
 	}
 	
-	buffer_index++;
+	buffer_index = (buffer_index + 1) % delay;
     }
     // Cleanup
     free(echo_buffer);
