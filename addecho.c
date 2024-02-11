@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
     short sample;
     int buffer_index = 0;
     short mixed_sample;
-        
+    
     while (fread(&sample, SAMPLE_SIZE, 1, input_file) == 1) {
         // Get the echo sample from the echo buffer
 	mixed_sample = echo_buffer[buffer_index] + sample;
@@ -164,10 +164,12 @@ int main(int argc, char *argv[]) {
 	        return 1;
 	    }
 	}
+    // Reset buffer_index
+    buffer_index = 0;
     }
     
     // Write the final echo samples to the output file
-    for (short j = 0; j < delay; j++){
+    for (short j = extra_zeroes; j < delay; j++){
 	if (fwrite(&echo_buffer[buffer_index], SAMPLE_SIZE, 1, output_file) != 1) {
 	    fprintf(stderr, "Error writing mixed sample to output file\n");
 	    free(echo_buffer);
