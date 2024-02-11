@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -26,7 +27,7 @@ int is_positive_integer(const char *str) {
 int is_valid_float(const char *str) {
     int has_decimal_point = 0;
     if (*str == '-') { // Skip leading minus sign
-        str++;
+        str++;	
     }
     while (*str != '\0') {
         if (*str == '.') {
@@ -42,45 +43,55 @@ int is_valid_float(const char *str) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s <input file> <output file> [delay] [volume_scale]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [delay] [volume_scale] <input file> <output file>\n", argv[0]);
         return 1;
     }
 
-    char *input_file_path = argv[1];
-    char *output_file_path = argv[2];
+    char *input_file_path;
+    char *output_file_path;
     int delay = DEFAULT_DELAY;
     float volume_scale = DEFAULT_VOLUME_SCALE;
     unsigned int *sizeptr;
 
-    // Validate and parse delay
-    if (argc > 3) {
-        if (is_positive_integer(argv[3])) {
-            delay = atoi(argv[3]);
-            if (delay <= 0) {
-                fprintf(stderr, "Delay must be a positive integer.\n");
-                return 1;
-            }
-        } else {
-            fprintf(stderr, "Invalid delay value. It must be a positive integer.\n");
-            return 1;
-        }
+    int opt;
+    // Parse the optional arguments
+    while ((opt = getopt(argc, argv, "d:v:")) != -1){
+	switch(opt) {
+	    case 'd':
+		// Validate and parse delay
+        	if (is_positive_integer(optarg)) {
+            	    delay = atoi(optarg);
+            		if (delay <= 0) {
+                	    fprintf(stderr, "Delay must be a positive integer.\n");
+                	    return 1;
+            		}
+        	} else {
+            	    fprintf(stderr, "Invalid delay value. It must be a positive integer.\n");
+            	    return 1;
+        	}
+		break;
+	    case 'v':
+		// Validate and parse volume_scale
+        	if (is_valid_float(optarg)) {
+            	    volume_scale = atof(optarg);
+            		if (volume_scale < 0) {
+                	    fprintf(stderr, "Volume scale cannot be negative.\n");
+                	    return 1;
+            		}
+        	} else {
+            	    fprintf(stderr, "Invalid volume scale value. It must be a positive number.\n");
+            	    return 1;
+        	}
+		break;
+	}
     }
+    
+    
 
-    // Validate and parse volume_scale
-    if (argc > 4) {
-        if (is_valid_float(argv[4])) {
-            volume_scale = atof(argv[4]);
-            if (volume_scale < 0) {
-                fprintf(stderr, "Volume scale cannot be negative.\n");
-                return 1;
-            }
-        } else {
-            fprintf(stderr, "Invalid volume scale value. It must be a positive number.\n");
-            return 1;
-        }
-    }
+
 
     // Open the input WAV file
+    input_file_path = argv[(optind)];
     FILE *input_file = fopen(input_file_path, "rb");
     if (!input_file) {
         fprintf(stderr, "Could not open input file: %s\n", input_file_path);
@@ -88,6 +99,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Open the output WAV file
+    output_file_path = argv[(optind + 1)];
     FILE *output_file = fopen(output_file_path, "wb");
     if (!output_file) {
         fprintf(stderr, "Could not open output file: %s\n", output_file_path);
@@ -166,10 +178,12 @@ int main(int argc, char *argv[]) {
 	}
     // Reset buffer_index
     buffer_index = 0;
+    } else {
+        extra_zeroes = 0;
     }
     
     // Write the final echo samples to the output file
-    for (short j = extra_zeroes; j < delay; j++){
+    for (long j = extra_zeroes; j < delay; j++){
 	if (fwrite(&echo_buffer[buffer_index], SAMPLE_SIZE, 1, output_file) != 1) {
 	    fprintf(stderr, "Error writing mixed sample to output file\n");
 	    free(echo_buffer);
@@ -177,7 +191,6 @@ int main(int argc, char *argv[]) {
 	    fclose(output_file);
 	    return 1;
 	}
-	
 	buffer_index = (buffer_index + 1) % delay;
     }
     // Cleanup
